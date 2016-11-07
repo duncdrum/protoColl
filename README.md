@@ -18,13 +18,12 @@ You can follow the link from moodle to see the app running on the cluster's test
 ``` cd protoColl ```
 3. call ant by typing:
 ``` ant ```
-you should see 
+you should see:
 ```BUILD SUCCESSFUL```
 
-
 4. Go to your running exist-db and open package manager from the dashboard. 
-4.1. Click on the "add package" symbol in the upper left corner
-4.2. Click on the Upload button, and select the .xar file you just created which is inside the "build" folder.
+  1. Click on the "add package" symbol in the upper left corner
+  2. Click on the Upload button, and select the .xar file you just created which is inside the "build" folder.
 
 ## Caveat
 This app is running on our test-server, in case you receive a 404, please try again after a few minutes. Chances are someone tested something while you were trying to access it.
