@@ -13,15 +13,23 @@ declare function local:decimal-to-hex ($x as xs:integer) {
                 ($x mod 16) + 1, 1))
 };                                   
 
-
+(:generate xml:id based on unicode hex value:)
 
 <charDecl xml:lang="en">
     {
     for $glyph in /tei:charDecl/tei:glyph
-    return if (data($glyph/@xml:id) = 0)
-        then ($glyph)
-        else (
-            <glyph
+    return 
+    (:If first character is IDC glyph use old id:)
+        if (string-to-codepoints(
+                substring($glyph/tei:mapping[1]/string(), 1, 1)
+                ) = 12272 to 12283 
+            )
+        then (<glyph
+                xml:id="{data($glyph/@n)}" 
+                n="{data($glyph/@n)}">
+                {$glyph/*}
+            </glyph>)
+        else (<glyph
                 xml:id="u{
                     local:decimal-to-hex(string-to-codepoints(substring($glyph/tei:mapping[1]/string(), 1, 1)))
                     }" 
@@ -29,7 +37,6 @@ declare function local:decimal-to-hex ($x as xs:integer) {
                     data($glyph/@n)
                     }">
                 {$glyph/*}
-            </glyph>
-            )
+            </glyph>)
     }
 </charDecl>
