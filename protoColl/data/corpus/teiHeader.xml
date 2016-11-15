@@ -6,12 +6,12 @@
             <title xml:lang="zh-Latn-alalc97">ming yi tong zhi</title>
         </titleStmt>
         <publicationStmt>
-            <p>【四庫全書・文淵閣】 hastily tranformed to TEI for testing ID KR2k0008 <ref
-                    target="https://github.com/kanripo/KR2k0008"/></p>
+            <p>【四庫全書・文淵閣】 hastily tranformed to TEI for testing ID KR2k0008 <ref target="https://github.com/kanripo/KR2k0008"/>
+            </p>
         </publicationStmt>
         <sourceDesc>
             <p>Converted to TEI from Kanripo txt files, PNG images of gaiji characters from source encoded as unicode.</p>
-            <p>Born digital</p>            
+            <p>Born digital</p>
         </sourceDesc>
     </fileDesc>
     <encodingDesc>
