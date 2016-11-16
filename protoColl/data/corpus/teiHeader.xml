@@ -17,6 +17,12 @@
         </sourceDesc>
     </fileDesc>
     <encodingDesc>
+        <listPrefixDef>
+            <prefixDef ident="page" matchPattern="(.*)"
+                replacementPattern="(http://img.kanripo.org/general/skqs/wyg//WYG0472/WYG0472-$1.png)">
+                <p>Digital Scans of the source images are hosted on kanripo.org</p>
+            </prefixDef>
+        </listPrefixDef>
         <xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="charDecl.xml" parse="xml"/>
     </encodingDesc>
     <profileDesc>
