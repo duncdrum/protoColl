@@ -14,9 +14,10 @@ declare function local:gaiji-ref($nodes as node()*) as item()* {
     for $g in $nodes, 
         $match in $gaiji//glyph
     where data($g/@xml:id) eq data($match/@n)
-    return update replace $g with
+    return
+        update replace $g with
         <g ref="#{data($match/@xml:id)}">
-            {$match/mapping[@type ="Unicode"]/string()}
+            {$match/mapping[@type ="Unicode"]/text()}
         </g>
 };
 
