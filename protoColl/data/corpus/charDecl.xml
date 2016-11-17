@@ -25,7 +25,7 @@
     </glyph>
     <glyph xml:id="u20A75" n="KR1318">
         <mapping type="standard">𠩵</mapping>
-        <note>wenlinPUC U+E768 </note>
+        <note>wenlin PUC U+E768</note>
     </glyph>
     <glyph xml:id="u24B41" n="KR1877">
         <mapping type="Unicode">𤭁</mapping>
@@ -308,9 +308,9 @@
     <glyph xml:id="u26318" n="KR0699">
         <mapping type="Unicode">𦌘</mapping>
     </glyph>
-    <glyph xml:id="uEB51" n="KR1643">
-        <mapping type="Unicode"></mapping>
+    <glyph xml:id="u235F4" n="KR1643">
         <mapping type="standard">𣗴</mapping>
+        <note>wenlin PUC U+EB51</note>
     </glyph>
     <glyph xml:id="KR0550" n="KR0550">
         <mapping type="Unicode">⿸厂聴</mapping>

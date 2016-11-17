@@ -1,6 +1,8 @@
 declare namespace tei="http://www.tei-c.org/ns/1.0";
 declare default element namespace "http://www.tei-c.org/ns/1.0";
 
+declare variable $corpus := collection('/data/corpus/');
+
 declare function local:decimal-to-hex ($x as xs:integer) {
 (:convert  decimal codepoints to unicode hexadecimal  :)
     if ($x = 0)
@@ -33,9 +35,7 @@ declare function local:decimal-to-hex ($x as xs:integer) {
                 xml:id="u{
                     local:decimal-to-hex(string-to-codepoints(substring($glyph/tei:mapping[1]/string(), 1, 1)))
                     }" 
-                n="{
-                    data($glyph/@n)
-                    }">
+                n="{data($glyph/@n)}">
                 {$glyph/*}
             </glyph>)
     }
