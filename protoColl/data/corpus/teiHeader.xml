@@ -12,16 +12,13 @@
             </p>
         </publicationStmt>
         <sourceDesc>
-            <p>Converted to TEI from Kanripo source files at <ref target="https://github.com/kanripo/KR2k0008"/>. </p>
-            <p>Born digital</p>
+            <p>Converted to TEI from Kanripo source files at <ref target="https://github.com/kanripo/KR2k0008"/>.</p>
         </sourceDesc>
     </fileDesc>
     <encodingDesc>
+        <p>Digital Scans of the source images are hosted on kanripo.org <ref target="http://www.kanripo.org"/>. Original page numbering not visible on scans, hence logical numbering generated automatically. Gaiji characters have been either inserted into text where unicode codepoints permitted, or transcribed using unicode ICD format.</p>
         <listPrefixDef>
-            <prefixDef ident="page" matchPattern="(.*)"
-                replacementPattern="(http://img.kanripo.org/general/skqs/wyg//WYG0472/WYG0472-$1.png)">
-                <p>Digital Scans of the source images are hosted on kanripo.org</p>
-            </prefixDef>
+            <prefixDef ident="page" matchPattern="(.*)" replacementPattern="(http://img.kanripo.org/general/skqs/wyg//WYG0472/WYG0472-$1.png)"/>
         </listPrefixDef>
         <xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="charDecl.xml" parse="xml"/>
     </encodingDesc>
