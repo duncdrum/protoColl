@@ -20,35 +20,39 @@ declare function local:insert-page-tags($nodes as node()*) as item()* {
         typeswitch($nodes)
             case text() return $node
             case comment() return $node
-            case element(pb) return <ab type="page" subtype="">
-                                        {$node/node()}
+            case element (ab) return $node
+            case element (pb) return <ab type="page" subtype="">
+                                        {local:insert-page-tags($node/node())}
                                     </ab>
         default return local:insert-page-tags($node/node())
 };
 
-declare function local:insert-sheet-tags($nodes as node()*) as item()* {
+declare function local:insert-ab-tags($nodes as node()*) as item()* {
     (:  Add sheet ab elements for structural markup based on previously converted pb elements  :)
     (: run  on $text//ab after initial conversion :)
     (: replaces the old ab element with a nested sequence of  ab elements up unto the @page  ab element :)
     
     for $node in $nodes
     return 
-        typeswitch($nodes)
+        typeswitch($node)
             case text() return $node
             case comment() return $node
             case element (ab) return  <ab type="fasc" n="{substring(string($node/pb[1]/@n), 2, 2)}">
                                             <ab type="sheet">
                                                 <ab type="block">
-                                                    {$node/node()}
+                                                    {local:insert-ab-tags($node/node())}
                                                 </ab>
                                             </ab>
                                         </ab>
-        default return local:insert-sheet-tags($node/node())
+            case element (pb) return <ab type="page" subtype="">
+                                        {local:insert-ab-tags($node/node())}
+                                    </ab>
+        default return local:insert-ab-tags($node/node())
 
 };
 
 
 
-local:insert-sheet-tags($text//ab[77])
+local:insert-ab-tags($text)
 
 
