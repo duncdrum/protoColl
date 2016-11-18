@@ -38,10 +38,6 @@ declare function local:insert-ab-tags($nodes as node()*) as item()* {
         typeswitch($node)
             case text() return $node
             case comment () return $node
-(:            case element (TEI) return local:insert-ab-tags($node/node()):)
-(:            case element (include) return $node:)
-(:            case element (text) return $node:)
-(:            case element (body) return $node:)
             case element (ab) return  <ab type="fasc" n="{substring(string($node/pb[1]/@n), 2, 2)}">
                                             <ab type="sheet">
                                                 <ab type="block">
@@ -63,7 +59,8 @@ declare function local:insert-ab-tags($nodes as node()*) as item()* {
 };
 
 (:count($text//pb):)
-
-local:insert-ab-tags($text//text)
+for $body in $text//body
+return update replace $body with
+<body>{local:insert-ab-tags($body)}</body>
 
 
