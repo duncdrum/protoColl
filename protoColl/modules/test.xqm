@@ -29,14 +29,19 @@ declare function local:insert-page-tags($nodes as node()*) as item()* {
 
 declare function local:insert-ab-tags($nodes as node()*) as item()* {
     (:  Add sheet ab elements for structural markup based on previously converted pb elements  :)
-    (: run  on $text//ab after initial conversion :)
+    (: run  on $text after initial conversion :)
     (: replaces the old ab element with a nested sequence of  ab elements up unto the @page  ab element :)
+    (:  page ab closes in bad location  @fasc in output is not equal to "juan" as captured in source:)
     
     for $node in $nodes
     return 
         typeswitch($node)
             case text() return $node
-            case comment() return $node
+            case comment () return $node
+(:            case element (TEI) return local:insert-ab-tags($node/node()):)
+(:            case element (include) return $node:)
+(:            case element (text) return $node:)
+(:            case element (body) return $node:)
             case element (ab) return  <ab type="fasc" n="{substring(string($node/pb[1]/@n), 2, 2)}">
                                             <ab type="sheet">
                                                 <ab type="block">
@@ -44,15 +49,21 @@ declare function local:insert-ab-tags($nodes as node()*) as item()* {
                                                 </ab>
                                             </ab>
                                         </ab>
-            case element (pb) return <ab type="page" subtype="">
-                                        {local:insert-ab-tags($node/node())}
+            case element (pb) return <ab type="page" 
+                                        subtype="{substring($node/@n, string-length($node/@n))}"
+                                        n="{substring(substring-after($node/@n, "-"), 
+                                            1, string-length(substring-after($node/@n, "-")) -1)}">
+                                            <pb facs="{$node/@facs}"/>
+                                                {local:insert-ab-tags($node/node())}
                                     </ab>
+            case element (hi) return $node
+            case element (lb) return $node
+            case element (g) return $node
         default return local:insert-ab-tags($node/node())
-
 };
 
+(:count($text//pb):)
 
-
-local:insert-ab-tags($text)
+local:insert-ab-tags($text//text)
 
 
