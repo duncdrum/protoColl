@@ -10,5 +10,4 @@
     <target>protoColl</target>
     <prepare>pre-install.xql</prepare>
     <finish/>
-    <deployed>2016-11-07T15:49:39.711+01:00</deployed>
 </meta>

@@ -6,15 +6,20 @@
             <title xml:lang="zh-Latn-alalc97">ming yi tong zhi</title>
         </titleStmt>
         <publicationStmt>
-            <p>【四庫全書・文淵閣】 hastily tranformed to TEI for testing ID KR2k0008 <ref
-                    target="https://github.com/kanripo/KR2k0008"/></p>
+            <p>【四庫全書・文淵閣】 hastily tranformed to TEI for testing. 
+                Access  via kanripo.org:  
+                <ref target="http://www.kanripo.org/text/KR2k0008/"/> includes scanned page images. 
+            </p>
         </publicationStmt>
         <sourceDesc>
-            <p>Converted to TEI from Kanripo txt files, PNG images of gaiji characters from source encoded as unicode.</p>
-            <p>Born digital</p>            
+            <p>Converted to TEI from Kanripo source files at <ref target="https://github.com/kanripo/KR2k0008"/>.</p>
         </sourceDesc>
     </fileDesc>
     <encodingDesc>
+        <p>Digital Scans of the source images are hosted on kanripo.org <ref target="http://www.kanripo.org"/>. Original page numbering not visible on scans, hence logical numbering generated automatically. Gaiji characters have been either inserted into text where unicode codepoints permitted, or transcribed using unicode ICD format.</p>
+        <listPrefixDef>
+            <prefixDef ident="page" matchPattern="(.*)" replacementPattern="(http://img.kanripo.org/general/skqs/wyg//WYG0472/WYG0472-$1.png)"/>
+        </listPrefixDef>
         <xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="charDecl.xml" parse="xml"/>
     </encodingDesc>
     <profileDesc>
