@@ -10,23 +10,6 @@ declare variable  $gaiji := doc(concat($corpus, 'charDecl.xml'));
 declare variable  $text := doc(concat($corpus, 'KR2k0008.xml'));
 
 
-declare function local:insert-page-tags($nodes as node()*) as item()* {
-    (:  Add page ab elements  :)
-    (: run  on $text//ab after running insert-sheet-tags  :)
-    (: insert ab element for pages including logical and recto verso numbering  :)
-
-    for $node in $nodes
-    return 
-        typeswitch($nodes)
-            case text() return $node
-            case comment() return $node
-            case element (ab) return $node
-            case element (pb) return <ab type="page" subtype="">
-                                        {local:insert-page-tags($node/node())}
-                                    </ab>
-        default return local:insert-page-tags($node/node())
-};
-
 declare function local:insert-ab-tags($nodes as node()*) as item()* {
     (:  Add sheet ab elements for structural markup based on previously converted pb elements  :)
     (: run  on $text after initial conversion :)
@@ -59,8 +42,79 @@ declare function local:insert-ab-tags($nodes as node()*) as item()* {
 };
 
 (:count($text//pb):)
-for $body in $text//body
-return update replace $body with
-<body>{local:insert-ab-tags($body)}</body>
+(:for $body in $text//body:)
+(:return update replace $body with:)
+(:<body>{local:insert-ab-tags($body)}</body>:)
+
+(:declare function local:section($e as element(pb)) { <page>{local:nextPara(
+$e/following-sibling::*[1][self::pb])} </page>};
+
+declare function local:nextPara($p as element(ab)?) { if ($p) then ($p,
+local:nextPara($p/following-sibling::*[1][self::ab])) else ()};
+
+return
+<out>{for $h in $in return local:section($h)}</out>:)
+
+let $in := 
+    <ab>
+        <pb n="1a"/>
+        aaaa<lb/>
+        <pb n="1b"/>
+        <hi>bb<lb/>bb</hi>
+        <pb n="2a"/>
+        cccc<lb/>
+        <pb n="2b"/>
+        dddd<lb/>
+        <pb n="3a"/>
+        eeee<lb/>
+    </ab>
+    
+let $out := 
+    <div>
+        <sheet>
+            <page>
+            <pb n="1a"/>
+            aaaa<lb/>
+            </page>
+            <fw/>
+            <page>
+            <pb n="1b"/>
+            <hi>bb<lb/>bb</hi>
+            </page>
+        </sheet>
+        <sheet>
+        <page>
+             <pb n="2a"/>
+             cccc<lb/>
+             </page>
+             <fw/>
+             <page>
+             <pb n="2b"/>
+             dddd<lb/>
+        </page>
+        </sheet>
+        <sheet>
+        <page>
+            <pb n="3a"/>
+            eeee<lb/>
+        </page>
+        </sheet>
+    </div>
+
+return
+
+
+
+(:return
+    <sheet>
+        {let $g := substring(data($page/pb/@n), 1, 1)
+        for $page in $in/* 
+        
+        group by $g 
+
+        return
+            <page>{$page/../node()}</page>}
+    </sheet>
+:)
 
 
