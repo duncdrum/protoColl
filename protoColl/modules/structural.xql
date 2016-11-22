@@ -9,39 +9,14 @@ declare variable $header := doc(concat($corpus, 'teiHeader.xml'));
 declare variable $gaiji := doc(concat($corpus, 'charDecl.xml'));
 declare variable $text := doc(concat($corpus, 'KR2k0008.xml'));
 
-(:declare function local:oldinsert-sheet-tags($nodes as node()*) as item()* {
-    (\:  Add sheet ab elements for structural markup :\)
-    (\: run on $text//body after initial conversion :\)
-    (\: replaces the old ab element with a nested sequence of  ab elements up unto the @page  ab element :\)
-    (\:  page ab closes in bad location  @fasc in output is not equal to "juan" as captured in source:\)
-    
-    for $node in $nodes
-    return 
-        typeswitch($node)
-            case text() return $node
-            case comment () return $node
-            case element (ab) return  <div type="fasc" n="{substring(string($node/pb[1]/@n), 2, 2)}">
-                                            {local:insert-sheet-tags($node/node())}
-                                        </div>
-            case element (pb) return <div type="sheet">
-                                                <div type="block">
-                                                    <ab type="page" 
-                                                        subtype="{substring($node/@n, string-length($node/@n))}"
-                                                        n="{substring(substring-after($node/@n, "-"), 
-                                                            1, string-length(substring-after($node/@n, "-")) -1)}">
-                                                            <pb facs="{$node/@facs}"/>
-                                                                {local:insert-sheet-tags($node/node())}
-                                                    </ab>
-                                                </div>
-                                        </div>    
-            case element (hi) return $node
-            case element (lb) return $node
-            case element (g) return $node
-        default return local:insert-sheet-tags($node/node())
-};:)
+(:because of a bug in exist2.2 handling of group by clauses https://github.com/eXist-db/exist/issues/967
+the functions below are pseudo code for futre automated processing of kanripo documents. 
+the actual input documents had to modified via regex replacement externally 
+so that the functions couldn't really be tested.
+:)
 
 
-(: declare function local:insert-sheet-tags($nodes as node()*) as item()* {
+declare function local:insert-sheet-tags($nodes as node()*) as item()* {
     (:  Add sheet ab elements for structural markup :)
     (:  this is a positional grouping problem so very much 'xquery-ouch'  :)
     (:  !!! make sure that gaiji aren't inadvertently converted to tofu !!!  :)
@@ -72,11 +47,8 @@ declare variable $text := doc(concat($corpus, 'KR2k0008.xml'));
             case element (lb) return $node
             case element (g) return $node
         default return local:insert-sheet-tags($node/node())                                
-};:)
+};
 
-(: ../child::x[. >> $current]:)
-
-(:local:insert-sheet-tags($text//ab):)
 
 (:let $pi :=<?xml version="1.0" encoding="UTF-8"?>
 <?xml-model href="http://www.tei-c.org/release/xml/tei/custom/schema/relaxng/tei_all.rng" type="application/xml" schematypens="http://relaxng.org/ns/structure/1.0"?>
@@ -88,20 +60,19 @@ declare variable $text := doc(concat($corpus, 'KR2k0008.xml'));
     <text>
         <front>
             <div type="fasc" n="00">
-        {for $front in $text//ab
-        where substring(data($front/pb[1]/@n), 1, 3) eq '000'
-        return
-             $text//ab} (:local:insert-sheet-tags($front):)
+                {for $front in $text//ab[@type="fasc"]
+                where substring(data($front/div/div/ab/pb[1]/@facs), 5, 3) eq '000'
+                return
+                     $front/node()} 
             </div>
         </front>
         <body>
-            {for $fasc in $text//ab
-            where substring(data($fasc/pb[1]/@n), 1, 3) != '000'
+            {for $fasc in $text//ab[@type="fasc"]
+            where substring(data($fasc/div/div/ab/pb[1]/@n), 5, 3) != '000'
             return
-                <div type="fasc" n="{substring(string($fasc/pb[1]/@n), 2, 2)}">
-                    {$text//ab} (:local:insert-sheet-tags($fasc):)
-                </div>
-            }
+                <div type="fasc" n="{substring(string($fasc/div/div/ab/pb[1]/@facs), 6, 2)}">
+                    {$fasc/node()} 
+                </div>}
         </body>
     </text>
 </TEI>

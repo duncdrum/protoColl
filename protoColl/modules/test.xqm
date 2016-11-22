@@ -101,20 +101,8 @@ let $out :=
         </sheet>
     </div>
 
+for $n in $text//ab[@type ="fasc"]
 return
-
-
-
-(:return
-    <sheet>
-        {let $g := substring(data($page/pb/@n), 1, 1)
-        for $page in $in/* 
-        
-        group by $g 
-
-        return
-            <page>{$page/../node()}</page>}
-    </sheet>
-:)
+    $n[1]/node()
 
 
