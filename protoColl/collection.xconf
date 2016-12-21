@@ -21,17 +21,24 @@
             <create qname="tei:person" type="xs:string"/>
             <create qname="tei:persName" type="xs:string"/>
             <create qname="tei:orgName" type="xs:string"/>
+            <create qname="tei:place" type="xs:string"/>
             <create qname="tei:placeName" type="xs:string"/>
+            <create qname="tei:location" type="xs:string"/>
             <create qname="tei:title" type="xs:string"/>
+            <create qname="tei:bibl" type="xs:string"/>
             
-            <!--  aux (id are always indexed   -->
+            <!--  aux (id are always indexed)   -->
             <create qname="@n" type="xs:string"/>
             <create qname="@ana" type="xs:string"/>
             <create qname="@type" type="xs:string"/>
+            <create qname="@ref" type=" xs:string"/>
+            <create qname="@target" type="xs:string"/>
+            <create qname="@sameAs" type="xs:string"/>
             
             <!--  numerical   -->
             <create qname="tei:date" type="xs:string"/>
             <create qname="@when" type="xs:string"/>
+            <create qname="tei:geo" type="xs:double"/>
         </range>
     </index>
 </collection>

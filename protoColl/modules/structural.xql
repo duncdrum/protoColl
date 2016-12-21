@@ -3,18 +3,26 @@ declare namespace tei="http://www.tei-c.org/ns/1.0";
 declare namespace xi="http://www.w3.org/2001/XInclude";
 declare default element namespace "http://www.tei-c.org/ns/1.0";
 
+declare variable $data := '/db/apps/protoColl/data/';
 declare variable $corpus := '/db/apps/protoColl/data/corpus/';
 
 declare variable $header := doc(concat($corpus, 'teiHeader.xml'));
 declare variable $gaiji := doc(concat($corpus, 'charDecl.xml'));
 declare variable $text := doc(concat($corpus, 'KR2k0008.xml'));
 
-(:because of a bug in exist2.2 handling of group by clauses https://github.com/eXist-db/exist/issues/967
-the functions below are pseudo code for futre automated processing of kanripo documents. 
-the actual input documents had to modified via regex replacement externally 
-so that the functions couldn't really be tested.
-:)
+(: !!! CAVEAT !!!
+exist-db is great except whern it isn't. The below is pseudo code because: 
 
+1) a bug in handling of group by clauses https://github.com/eXist-db/exist/issues/967 
+prevents fully automated import of kanripo documents
+
+2) for exist we need to replace standard xquery function:
+    fn:unparsed-text(concat($data, 'test.txt')) 
+with
+    util:binary-to-string(util:binary-doc(concat($data, 'test.txt')))
+    
+    A future working version should conform to http://www.mandoku.org/mandoku-format-en.html   
+:)
 
 declare function local:insert-sheet-tags($nodes as node()*) as item()* {
     (:  Add sheet ab elements for structural markup :)
