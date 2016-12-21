@@ -7,7 +7,7 @@ Texts are placeholders, the app focuses on layout and performance testing.
 The data folder contains dummy datasets modeling my sources. These are *NOT* real transcription, but heavily modified materials for testing. You can find out more about the test sets on the wiki here.
 
 ## Building
-You can follow the link from moodle to see the app running on the cluster's test server. To install a local copy you need the following: 
+You can follow the [link](http://kjc-ws2.kjc.uni-heidelberg.de:8900/exist/apps/protoColl/index.html) from moodle to see the app running on the cluster's test server. To install a local copy you need the following: 
 * exist-db 2.2+
 * ant 1.8+
 
