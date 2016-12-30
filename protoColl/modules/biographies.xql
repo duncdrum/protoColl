@@ -70,16 +70,17 @@ declare variable $SOCIAL_INSTITUTION_NAME_CODES:= doc(concat($src, 'SOCIAL_INSTI
 declare variable $SOCIAL_INSTITUTION_TYPES:= doc(concat($src, 'SOCIAL_INSTITUTION_TYPES.xml')); 
 
 (:This is the main Transformation of Biographical data from CBDB.
-There local:biog transforms persons from the BIOG_MAIN table.
+ local:biog transforms persons from the BIOG_MAIN table.
 :)
 
 (:TODO:
-- find out how to properly unenocde '&amp;#22;' in _proper and _rm names
 - split the biogmain transformation into two files one for biog main and aliases on fore event n stuff?
-- find an external ontology to for kinship ties, or make the cbdb syntax xml-attributable
+- consider tei:occupation to sort through the whole entry office posting mess
+- create a taxonony for offices
 
 :)
 
+(:AUX FUNCTIONS:)
 declare function local:isodate ($string as xs:string?)  as xs:string* {
 (:see calendar.xql:)
      
@@ -93,6 +94,33 @@ declare function local:sqldate ($timestamp as xs:string?)  as xs:string* {
 concat(substring($timestamp, 1, 4), '-', substring($timestamp, 5, 2), '-', substring($timestamp, 7, 2)) 
 };
 
+declare function local:create-mod-by ($created as node()*, $modified as node()*) as node()*{
+(:this function takes the standardized record sfor creation and modification of cbdb entries 
+and translates them into tei:notes.
+
+It expects the c_created_by and c_modified_by as direct input.
+
+This data is distinct from the modifications of the TEI output recorded in the header.:)
+
+for $creator in $created
+return
+    if (empty($creator)) 
+    then ()
+    else (<note type="created" target="{concat('#',$creator/text())}">
+                <date when="{local:sqldate($creator/../c_created_date)}"/>
+           </note>),
+              
+for $modder in $modified
+return
+    if (empty($modder)) 
+    then ()
+    else (<note type="modified" target="{concat('#',$modder/text())}">
+                <date when="{local:sqldate($modder/../c_modified_date)}"/>
+          </note>)   
+        
+        };
+
+(:NAMES:)
 declare function local:name ($names as node()*, $lang as xs:string?) as node()* {
 (:This function checks the different name components and languages to retun persNames.
 It expects valid c_name, or c_cname_chn nodes, and 'py' or'hz' as arguments.
@@ -186,14 +214,14 @@ It checks ALTNAME_DATA for the c_personid and returns persName elements.
  [c_personid] INTEGER,                  x
  [c_alt_name] CHAR(255),               x
  [c_alt_name_chn] CHAR(255),           x
- [c_alt_name_type_code] INTEGER,        x
+ [c_alt_name_type_code] INTEGER,      x
  [c_source] INTEGER,                    x
  [c_pages] CHAR(255),                   d
- [c_notes] CHAR,                        x
- [c_created_by] CHAR(255),              x
- [c_created_date] CHAR(255),            x
- [c_modified_by] CHAR(255),             x
- [c_modified_date] CHAR(255),           x
+ [c_notes] CHAR,                         x
+ [c_created_by] CHAR(255),             x
+ [c_created_date] CHAR(255),           x
+ [c_modified_by] CHAR(255),            x
+ [c_modified_date] CHAR(255),          x
 :)
 
 for $person in $ALTNAME_DATA//c_personid[. =$person]
@@ -239,119 +267,271 @@ return
             </persName>)            
 };
 
-declare function local:kin ($family as node()*) as node()* {
-
-(:This function takes persons via c_personid and returns a list kin group memebers and relations:)
-
-(:
-[tts_sysno] INTEGER,                    x                [c_kincode] INTEGER PRIMARY KEY, 
- [c_personid] INTEGER,                  x                [c_kin_pair1] INTEGER,
- [c_kin_id] INTEGER,                    x                [c_kin_pair2] INTEGER, 
- [c_kin_code] INTEGER,                  x                [c_kin_pair_notes] CHAR(50),
- [c_source] INTEGER,                                     [c_kinrel_chn] CHAR(255), 
- [c_pages] CHAR(255),                                    [c_kinrel] CHAR(255), 
- [c_notes] CHAR,                        x                 [c_kinrel_alt] CHAR(255), 
- [c_autogen_notes] CHAR,                                 [c_pick_sorting] INTEGER, 
- [c_created_by] CHAR(255),              d               [c_upstep] INTEGER, 
- [c_created_date] CHAR(255),            d               [c_dwnstep] INTEGER, 
- [c_modified_by] CHAR(255),             d               [c_marstep] INTEGER, 
- [c_modified_date] CHAR(255),           d               [c_colstep] INTEGER)
+(:RELATIONS:)
+declare function local:kin ($self as node()*) as node()* {
+    
+    (:This function takes persons via c_personid and returns a list kin group  relations.
+It's structure is tied to local:asso and changes should be made to both functions in concert.:)
+    
+    (:
+[tts_sysno] INTEGER,                    x                [c_kincode] INTEGER PRIMARY KEY,   x
+ [c_personid] INTEGER,                  x                [c_kin_pair1] INTEGER,              d
+ [c_kin_id] INTEGER,                    x                [c_kin_pair2] INTEGER,              d
+ [c_kin_code] INTEGER,                  x                [c_kin_pair_notes] CHAR(50),       d
+ [c_source] INTEGER,                   x                  [c_kinrel_chn] CHAR(255),         x
+ [c_pages] CHAR(255),                   d                 [c_kinrel] CHAR(255),             x
+ [c_notes] CHAR,                        x                 [c_kinrel_alt] CHAR(255),         x
+ [c_autogen_notes] CHAR,                  x               [c_pick_sorting] INTEGER,         x
+ [c_created_by] CHAR(255),              d               [c_upstep] INTEGER,                 d
+ [c_created_date] CHAR(255),            d               [c_dwnstep] INTEGER,                d
+ [c_modified_by] CHAR(255),             d               [c_marstep] INTEGER,                d
+ [c_modified_date] CHAR(255),           d               [c_colstep] INTEGER)                d
  :)
+    
+    (:9 basic categories of kinship Source: CBDB Manual p 13f
+none of these is symmetrical hence there is no need for mutuality checks as in local:asso
+'e' Ego (the person whose kinship is being explored) 
+'F' Father
+'M' Mother
+'B' Brother
+'Z' Sister
+'S' Son
+'D' Daughter
+'H' Husband
+'W' Wife
+'C' Concubine
 
-(:it would be nice to find valid xml expressions for kinrel so they can be added to tei:relation as @name:)
+'+' Older (e.g. older brother B+, 兄)
+'-' Younger (e.g. younger sister 妹)
+'*' Adopted heir ( as in S*, adopted son)
+'°' Adopted
+'!' Bastard
+'^' Step- (as in S^ step-son)
+'½'  half- (as in Z½ , half-sister)
+'~' Nominal (as in M~ , legitimate wife as nominal mother to children of concubine)
+'%' Promised husband or wife (marriage not completed at time of record)
+'y' Youngest (e.g., Sy is the youngest known son)
+'1' Numbers distinguish sequence (e.g., S1, S2 for first and second sons; W1, W2 for the first and the successor wives)
+'n' precise generation unknown
+'G-#', 'G+#' lineal ancestor (–) or descendant (+) of # generation №
+'G-n', 'G+n', 'Gn' lineal kin of an unknown earlier generation (G-n), or unknown later generation (G+n), or unknown generation (Gn)
+'G-#B', 'BG+#' a brother of a lineal ancestor of # generation; a brother’s lineal descendant of # generation
+'K', 'K-#', 'K+#', 'Kn' Lineage kin, of the same, earlier (–), later (+) or unknown (n) generation. CBDB uses “lineage kin” for cases where kinship is attested but the exact relationship is not known. Lineage kin are presumably not lineal (direct descent) kin.
+'K–', 'K+' Lineage kin of the same generation, younger (-) or elder (+).
+'P', 'P-#', 'P+#', 'Pn' Kin related via father’s sisters or mother’s siblings, of the same, earlier (–), later (+) or unknown (n) generation. Signified by the term biao (表) in Chinese. (CBDB uses these codes only when the exact relationship is not known). 
+'P–', 'P+' Kin related via father's sisters or mother's siblings, of the same generation, younger (-) or elder (+).
+'A' Affine/Affinal kin, kin by marriage
 
-for $kin in $KIN_DATA//c_personid[. = $family]
-let $tie := $KINSHIP_CODES//c_kincode[.= $kin/../c_kin_code]
+NOT Documented
+'(male)' -> ♂
+'(female)' -> ♀
+'©' -> of concubine
+' (claimed)' -> 
+' (eldest surviving son)' -> 
+' (only ...)'
+' (apical)'
 
-(:let basic :=
+:)
+    
+    (:it would be nice to find valid xml expressions for kinrel so they can be added to tei:relation as @name:)
+    
+    for $kin in $KIN_DATA//c_personid[. = $self]
+    let $tie := $KINSHIP_CODES//c_kincode[. = $kin/../c_kin_code]
+    
+    (:let basic :=
  for $:)
     
-return
-        <note>
-        <listPerson type="kinship">            
-            {for $n in $kin
-             return
-                <person sameAs="{concat('#BIO', $n/../c_kin_id/text())}">                    
-                    {if(empty($n/../c_notes)) 
-                    then() 
-                    else(<note>{$n/../c_notes/text()}</note>)
-                    }
-                </person>    
-            } 
-            {for $n in $tie
-            return
-                <listRelation type="personal">
-                    {if (empty($n/../c_pick_sorting)) 
-                    then (<relation name="kin">
-                            <desc>
-                                <desc type="short">{$n/../c_kinrel/text()}</desc>
-                                <desc xml:lang="en">{$n/../c_kinrel_alt/text()}</desc>
-                                <desc xml:lang="zh-Hant">{$n/../c_kinrel_chn/text()}</desc>
-                            </desc>
-                    </relation>)
-                    else(<relation name="kin" sortKey="{$n/../c_pick_sorting/text()}">
-                            <desc>
-                                <desc type="short">{$n/../c_kinrel/text()}</desc>
-                                <desc xml:lang="en">{$n/../c_kinrel_alt/text()}</desc>
-                                <desc xml:lang="zh-Hant">{$n/../c_kinrel_chn/text()}</desc>   
-                            </desc>                        
-                    </relation>)
-                    }
-                </listRelation>
-            }    
-            </listPerson>
-        </note>
+    return
+        element relation {
+            attribute active {concat('#BIO', $kin/../c_personid/text())},
+            attribute passive {concat('#BIO', $kin/../c_kin_id/text())},
+            attribute key {$tie/../c_kincode/text()},
+            if (empty($tie/../c_pick_sorting))
+            then
+                ()
+            else
+                (attribute sortKey {$tie/../c_pick_sorting/text()}),
+            attribute name {
+                if (contains($tie/../c_kinrel/text(), ' ('))
+                then (substring-before($tie/../c_kinrel/text(), ' ('))
+                else if (contains($tie/../c_kinrel/text(), 'male)'))
+                    then (replace(replace($tie/../c_kinrel/text(), '\(male\)', '♂'), '\(female\)', '♀'))
+                    else(translate($tie/../c_kinrel/text(), '#', '№'))},
+            if ($kin/../c_source[. > 0])
+            then
+                (attribute source {concat('#BIB', $kin/../c_source/text())})
+            else
+                (),
+            if (empty($kin/../c_autogen_notes))
+            then
+                ()
+            else
+                (attribute type {'auto-generated'}),
+            element desc {
+                if ($kin/../c_notes)
+                then
+                    (element label {$kin/../c_notes/text()})
+                else
+                    (),
+                element desc {
+                    attribute xml:lang {"en"},
+                    $tie/../c_kinrel_alt/text()
+                },
+                element desc {
+                    attribute xml:lang {"zh-Hant"},
+                    $tie/../c_kinrel_chn/text()
+                }
+            }
+        }
 };
 
-declare function local:asso ($friends as node()*) as node()* {   
+declare function local:asso ($ego as node()*) as node()* {
+    
+(: This function records association data in Tei. It expects a person as input, 
+to generate a list relations. 
 
-for $friend in $ASSOC_DATA//c_personid[. = $friends]
-let $tie := $friend/../c_assoc_code
-let $code := $ASSOC_CODE_TYPE_REL//c_assoc_code[. =$tie]
-let $type := $ASSOC_TYPES//c_assoc_type_id[ .= $code/../c_assoc_type_id]
+The structure of its output should match the output of local:kin
 
-return <note>
-        <listPerson type="social">
-                {for $n in $friend
-                return
-                <person sameAs="{concat('#BIO', $n/../c_kin_id/text())}">
-                    { if ($n/../c_notes) 
-                    then (<note>{$n/../c_notes/text()}</note>)
-                    else()
-                    }
-                </person>    
-                }    
-            <listRelation type="social">
-            {for $n in $tie
-                return 
-                if ($ASSOC_CODES//c_assoc_code[.= $n] = $ASSOC_CODES//c_assoc_code[.= $n]/../c_assoc_pair) 
-                then (<relation type="mutual" key="{$code/../c_assoc_type_id/text()}" sortKey="{$type/../c_assoc_type_sortorder/text()}">
-                        <desc>
-                            <desc xml:lang="en">{$type/../c_assoc_type_desc/text()}
-                                <label>{$ASSOC_CODES//c_assoc_code[. =$n]/../c_assoc_desc/text()}</label>
-                            </desc>
-                            <desc xml:lang="zh-Hant">{$type/../c_assoc_type_desc_chn/text()}
-                                <label>{$ASSOC_CODES//c_assoc_code[. =$n]/../c_assoc_desc_chn/text()}</label>
-                            </desc>
-                        </desc>
-                    </relation>)
-                else (<relation key="{$ASSOC_CODE_TYPE_REL//c_assoc_code[. =$n]/../c_assoc_type_id/text()}" sortKey="{$type/../c_assoc_type_sortorder/text()}">
-                        <desc>
-                            <desc xml:lang="en">{$type/../c_assoc_type_desc/text()}
-                                <label>{$ASSOC_CODES//c_assoc_code[. =$n]/../c_assoc_desc/text()}</label>
-                            </desc>
-                            <desc xml:lang="zh-Hant">{$type/../c_assoc_type_desc_chn/text()}
-                                <label>{$ASSOC_CODES//c_assoc_code[. =$n]/../c_assoc_desc_chn/text()}</label>
-                            </desc>
-                        </desc>
-                    </relation>)
+ASSOC_CODES contains both symmetrical and assymetrical relations, 
+these are converted into tei:relation/@active || @passive  || @mutual
+the following are still problematic:
+let $passive := ('Executed at the order of', 'Killed by followers of',
+                'was served by the medical arts of',
+                'Funerary stele written (for a third party) at the request of',
+                'Killed by followers of', 'His coalition attacked', 'Was claimed kin with')
+                
+let $active :=  ('Knew','Tried and found guilty'
+       ,'Fought against the rebel','Hired to teach in lineage school' 
+       ,'proceeded with (friendship)','Defeated in battle'
+       ,'Treated with respect','Served as lady-in-waiting' 
+       ,'friend to Y when Y was heir-apparent','recruited Y to be instructor at school,academy' 
+       ,'saw off on journey','took as foster daughter'
+       ,'Memorialized concerning','Took as foster son'
+       ,'opposed militarily','Toady to Y'
+       ,'Relied on book by','Refused affinal relation offered by'
+       ,'Requested Funerary stele be written by','Requested Tomb stone (mubiao) be written by'
+       ,'opposed assertion of emperorship by')
+.
+
+TODO
+yet unused mediated relations , tei handles this quite easily
+
+:)
+
+(:
+[tts_sysno] INTEGER,                                d
+ [c_assoc_code] INTEGER,                            x
+ [c_personid] INTEGER,                              x
+ [c_kin_code] INTEGER,                              
+ [c_kin_id] INTEGER,                    
+ [c_assoc_id] INTEGER,                              x
+ [c_assoc_kin_code] INTEGER,                    
+ [c_assoc_kin_id] INTEGER, 
+ [c_tertiary_personid] INTEGER, 
+ [c_assoc_count] INTEGER, 
+ [c_sequence] INTEGER, 
+ [c_assoc_year] INTEGER, 
+ [c_source] INTEGER,                                x
+ [c_pages] CHAR(255),                               d
+ [c_notes] CHAR,                                     x
+ [c_assoc_nh_code] INTEGER,                         
+ [c_assoc_nh_year] INTEGER, 
+ [c_assoc_range] INTEGER, 
+ [c_addr_id] INTEGER, 
+ [c_litgenre_code] INTEGER, 
+ [c_occasion_code] INTEGER, 
+ [c_topic_code] INTEGER, 
+ [c_inst_code] INTEGER, 
+ [c_inst_name_code] INTEGER, 
+ [c_text_title] CHAR(255), 
+ [c_assoc_claimer_id] INTEGER, 
+ [c_assoc_intercalary] BOOLEAN NOT NULL, 
+ [c_assoc_month] INTEGER, 
+ [c_assoc_day] INTEGER, 
+ [c_assoc_day_gz] INTEGER, 
+ [c_created_by] CHAR(255),                          
+ [c_created_date] CHAR(255), 
+ [c_modified_by] CHAR(255), 
+ [c_modified_date] CHAR(255))
+:)
+    
+    (:count($ASSOC_DATA//c_assoc_id[. > 0][. < 500]) = 1726
+whats up with $assoc_codes//c_assoc_role_type ?:)
+    
+    for $individual in $ASSOC_DATA//c_personid[. = $ego]
+    let $friends := $individual/../c_assoc_id
+    
+    let $code := $ASSOC_CODES//c_assoc_code[. = $individual/../c_assoc_code]
+    let $type-rel := $ASSOC_CODE_TYPE_REL//c_assoc_code[. = $individual/../c_assoc_code]
+    let $type := $ASSOC_TYPES//c_assoc_type_id[. = $type-rel/../c_assoc_type_id]
+    
+    return        
+        element relation {
+            if ($code/text() = $code/../c_assoc_pair/text())
+            then
+                (attribute mutual {
+                    concat('#BIO', $friends/text(), ' ', concat('#BIO', $individual/text()))
+                })
+            else
+                (
+                if (ends-with($code/../c_assoc_desc/text(), ' for')
+                or ends-with($code/../c_assoc_desc/text(), ' to')
+                or ends-with($code/../c_assoc_desc/text(), ' was)')
+                or ends-with($code/../c_assoc_desc/text(), ' of')
+                or ends-with($code/../c_assoc_desc/text(), 'ed')
+                or ends-with($code/../c_assoc_desc/text(), ' with')
+                or ends-with($code/../c_assoc_desc/text(), ' from')
+                or $code/../c_assoc_desc/text() eq 'visited'
+                or $code/../c_assoc_desc/text() eq 'Knew')
+                then
+                    (attribute active {concat('#BIO', $individual/text())},
+                    attribute passive {
+                        concat('#BIO', $friends/text())
+                    })
+                else
+                    (attribute active {
+                        concat('#BIO', $friends/text())
+                    },
+                    attribute passive {concat('#BIO', $individual/text())})),
+            attribute key {$type-rel/../c_assoc_type_id/text()},
+            attribute sortKey {$type/../c_assoc_type_sortorder/text()},
+            attribute name {
+                lower-case(
+                translate($type/../c_assoc_type_short_desc/text(), ' ', '-'))
+            },
+            if ($individual/../c_source[. > 0])
+            then
+                (attribute source {concat('#BIB', $individual/../c_source/text())})
+            else
+                (),
+            element desc {
+                if ($code/../c_assoc_role_type/text())
+                then
+                    (attribute type {$code/../c_assoc_role_type/text()})
+                else
+                    (),
+                if ($individual/../c_notes)
+                then
+                    (element label {$individual/../c_notes/text()})
+                else
+                    (),
+                element desc {
+                    attribute xml:lang {"en"},
+                    $code/../c_assoc_desc/text(),
+                    element label {$type/../c_assoc_type_desc/text()}
+                },
+                element desc {
+                    attribute xml:lang {"zh-Hant"},
+                    $code/../c_assoc_desc_chn/text(),
+                    element label {$type/../c_assoc_type_desc_chn/text()}
+                }
             }
-            </listRelation>
-        </listPerson>
-    </note>
-};       
+        }
 
-declare function local:status ($accolades as node()*) as node()* {
+};
+
+(:STATUS /STATE:)
+declare function local:status ($achievers as node()*) as node()* {
 (:the following lines can be added ones status types are linked to status codes to add a label child element to the language specific desc elements
  : 
  : let $statt := doc("/db/apps/cbdb/source/CBDB/code/STATUS_TYPES.xml")
@@ -363,7 +543,7 @@ declare function local:status ($accolades as node()*) as node()* {
  : then (<label>$statt//c_status_type_code[. = $statctr//c_status_type_code[. = $code]]/../c_status_type_desc_chn/text()</label>) else()
  :)
 
-for $status in $STATUS_DATA//c_personid[. = $accolades]
+for $status in $STATUS_DATA//c_personid[. = $achievers]
 
 let $code := $STATUS_CODES//c_status_code[. = $status/../c_status_code]
 let $first := $status/../c_firstyear
@@ -384,9 +564,50 @@ return
           }
           )
 };
-(:so far so good:)
+(:office related stuff:)
 declare function local:office_title ($offices as node()*) as node()* {
 
+(:This screams for its own taxonomy to be included via pointers as rolename via key ID
+dates are missing need rewrite
+:)
+(:
+ [tts_sysno] INTEGER, 
+ [c_personid] INTEGER, 
+ [c_office_id] INTEGER, 
+ [c_posting_id] INTEGER, 
+ [c_posting_id_old] INTEGER, 
+ [c_sequence] INTEGER, 
+ [c_firstyear] INTEGER, 
+ [c_fy_nh_code] INTEGER, 
+ [c_fy_nh_year] INTEGER, 
+ [c_fy_range] INTEGER, 
+ [c_lastyear] INTEGER, 
+ [c_ly_nh_code] INTEGER, 
+ [c_ly_nh_year] INTEGER, 
+ [c_ly_range] INTEGER, 
+ [c_appt_type_code] INTEGER, 
+ [c_assume_office_code] INTEGER, 
+ [c_inst_code] INTEGER, 
+ [c_inst_name_code] INTEGER, 
+ [c_source] INTEGER, 
+ [c_pages] CHAR(255), 
+ [c_notes] CHAR, 
+ [c_office_id_backup] INTEGER, 
+ [c_office_category_id] INTEGER, 
+ [c_fy_intercalary] BOOLEAN NOT NULL, 
+ [c_fy_month] INTEGER, 
+ [c_ly_intercalary] BOOLEAN NOT NULL, 
+ [c_ly_month] INTEGER, 
+ [c_fy_day] INTEGER, 
+ [c_ly_day] INTEGER, 
+ [c_fy_day_gz] INTEGER, 
+ [c_ly_day_gz] INTEGER, 
+ [c_dy] INTEGER, 
+ [c_created_by] CHAR(255), 
+ [c_created_date] CHAR(255), 
+ [c_modified_by] CHAR(255), 
+ [c_modified_date] CHAR(255), 
+:)
 
 for $ppl in $POSTED_TO_OFFICE_DATA//c_personid[. = $offices]/../c_office_id
 let $cat := $OFFICE_CATEGORIES//c_office_category_id[. = $ppl/../c_office_category_id]
@@ -425,6 +646,144 @@ return <roleName type ="office">
     else()
     }
     </roleName>
+};
+(:EVENTS:)
+declare function local:posting ($posting as node()*) as node()* {
+
+for $post in $POSTED_TO_OFFICE_DATA//c_personid[. =$posting]/../c_posting_id
+
+return
+    <state notBefore = "{local:isodate($post/../c_firstyear/text())}" 
+            notAfter = "{local:isodate($post/../c_lastyear/text())}"
+            type = "posting" 
+            sortKey = "{$post/../c_sequence/text()}"
+            key ="{$post/../c_office_category_id/text()}">
+        <label>posting</label>
+        {
+        if ($post/../c_notes[. != '']) 
+        then (<note>{$post/../c_notes/text()}</note>)
+        else()
+        }
+        {
+        if ($post/../c_appt_type_code[. > -1] or $post/../c_assume_office_code[. > -1]) 
+        then (<desc>
+                <desc xml:lang ="en">{$APPOINTMENT_TYPE_CODES//c_appt_type_code[. = $post/../c_appt_type_code]/../c_appt_type_desc/text()}
+                <label>{$ASSUME_OFFICE_CODES//c_assume_office_code[. = $post/../c_assume_office_code]/../c_assume_office_desc/text()}</label>
+            </desc>
+            <desc xml:lang="zh-Hant">{$APPOINTMENT_TYPE_CODES//c_appt_type_code[. = $post/../c_appt_type_code]/../c_appt_type_desc_chn/text()}
+                <label>{$ASSUME_OFFICE_CODES//c_assume_office_code[. = $post/../c_assume_office_code]/../c_assume_office_desc_chn/text()}</label>
+            </desc>
+            </desc>)
+        else()
+        }
+        {if ($POSTED_TO_ADDR_DATA//c_posting_id[. = $post]/../c_addr_id[. < 1]) 
+        then ()
+        else (<placeName ref="{concat('#PL', $POSTED_TO_ADDR_DATA//c_posting_id[. = $post]/../c_addr_id/text())}"/>)
+        }    
+        {if ($POSTED_TO_OFFICE_DATA//c_personid[. = $nodes]/../c_inst_code[. <1]) then()
+        else(<state>{local:instadd($ppl, $POSTED_TO_OFFICE_DATA)}</state>)
+        }
+    </state>
+};
+
+declare function local:entry ($nodes as node()*) as node()* {
+let $entd := doc("/db/apps/cbdb/source/CBDB/data/ENTRY_DATA.xml")
+let $entc := doc("/db/apps/cbdb/source/CBDB/code/ENTRY_CODES.xml")
+let $entt := doc("/db/apps/cbdb/source/CBDB/code/ENTRY_TYPES.xml")
+let $entctr := doc("/db/apps/cbdb/source/CBDB/code/ENTRY_CODE_TYPE_REL.xml")
+
+
+for $ppl in $entd//c_personid[. = $nodes]/../c_entry_code
+
+let $type := $entt//c_entry_type[. =$entctr//c_entry_code[. = $ppl]/../c_entry_type]
+return
+                <event when = "{if ($ppl/../c_year[. > 0]) 
+                                  then (local:isodate($ppl/../c_year/text())) 
+                                  else ()}" 
+                        key ="{$ppl/../c_exam_rank/text()}">
+                <label>entry</label>
+                {if ($ppl/../c_notes[. != '']) then (<note>{$ppl/../c_notes/text()}</note>) 
+                else ()
+                }
+                {if ($ppl/../c_age[. > 0]) then (<note>age: {$ppl/../c_age/text()}</note>)
+                else ()
+                }
+                {if ($ppl/../c_attempt_count[. > 0]) then (<note>attempt: {$ppl/../c_attempt_count/text()}</note>)
+                else()
+                }
+                    <event xml:lang="en"
+                            type = "{$type/../c_entry_type_desc/text()}" 
+                            sortKey = "{$type/../c_entry_type_sortorder/text()}">
+                        <label>{$entc//c_entry_code[. = $ppl]/../c_entry_desc/text()}</label>
+                    </event>
+                    <event xml:lang="zh-Hant"
+                            type = "{$type/../c_entry_type_desc_chn/text()}"
+                            sortKey = "{$type/../c_entry_type_sortorder/text()}">
+                         <label>{$entc//c_entry_code[. = $ppl]/../c_entry_desc_chn/text()}</label>
+                    </event>
+                    {if ($entd//c_personid[. = $nodes]/../c_inst_code[. < 1]) then ()
+                        else(local:instadd($ppl, $entd))
+                        }
+                    {if($entd/../c_addr_id[. < 1]) then ()
+                    else(<placeName ref="{concat('#PL', $entd/../c_addr_id/text())}"/>)                   
+                    }
+                </event>
+};
+(:end here:)
+declare function local:event ($participants as node()*) as node()* {
+(: no py or en name for events:)
+
+for $event in $EVENTS_DATA//c_personid[. = $participants]
+let $code := $EVENT_CODES//c_event_code[. = $event/../c_event_code]
+let $event-add := $EVENTS_ADDR//c_event_record_id[. = $event/../c_event_record_id]
+        return
+            element listEvent {  
+                element event { 
+                    if ($event/../c_year != 0)
+                    then (attribute when {local:isodate($event/../c_year/text())})
+                    else (''), 
+                    if ($code[. > 0])
+                    then (element head {$code/../c_event_name_chn/text()})
+                    else (), 
+                    if (empty($event/../c_event)) 
+                    then ()
+                    else (element label {$event/../c_event/text()}), 
+                    if (empty($event/../c_role))
+                    then()
+                    else (element desc {$event/../c_role/text()}),
+                    if (empty($event/../c_notes))
+                    then()
+                    else(element note {$event/../c_notes/text()}), 
+                    if (empty($event-add))
+                    then()
+                    else( element placeName {attribute ref {concat('#PL', $event-add/../c_addr_id/text())}})    
+                } 
+             }
+};
+
+declare function local:posses ($possessions as node()*) as node()* {
+(:five entries (18332, 13550, 45279, 45518, 3874)  affair good to go:)
+for $stuff in $POSSESSION_DATA//c_personid[. = $possessions]
+let $act := $POSSESSION_ACT_CODES//c_possession_act_code[ . = $stuff/../c_possession_act_code]
+let $where := $POSSESSION_ADDR//c_possession_row_id[. = $stuff/../c_possession_row_id]
+
+return 
+    if(empty($stuff))
+    then()
+    else( 
+        <state type="possession" subtype="{concat('POS', $act/text())}">
+            <label xml:lang="zh-Hant">{$stuff/../c_possession_desc_chn/text()}</label>                    
+            <label xml:lang="en">{$stuff/../c_possession_desc/text()}</label>
+        </state>)
+};
+(:following two need another pass and be made more siimilar:)
+declare function local:bio-add ($resident as node()*) as node()* {
+
+for $address in $BIOG_ADDR_DATA//c_personid[. = $resident]
+let $code := $BIOG_ADDR_CODES//c_addr_type[. = $address/../c_addr_type]
+(:dummy :)
+return 
+ ()
 };
 
 declare function local:instadd ($person as node()*, $inst as node()*) as node()* {
@@ -469,142 +828,6 @@ declare function local:instadd ($person as node()*, $inst as node()*) as node()*
             else()
             }
     </orgName>
-};
-
-declare function local:posting ($posting as node()*) as node()* {
-
-for $post in $POSTED_TO_OFFICE_DATA//c_personid[. =$posting]/../c_posting_id
-
-return
-    <state notBefore = "{local:isodate($post/../c_firstyear/text())}" 
-            notAfter = "{local:isodate($post/../c_lastyear/text())}"
-            type = "posting" 
-            sortKey = "{$post/../c_sequence/text()}"
-            key ="{$post/../c_office_category_id/text()}">
-        <label>posting</label>
-        {
-        if ($post/../c_notes[. != '']) 
-        then (<note>{$post/../c_notes/text()}</note>)
-        else()
-        }
-        {
-        if ($post/../c_appt_type_code[. > -1] or $post/../c_assume_office_code[. > -1]) 
-        then (<desc>
-                <desc xml:lang ="en">{$APPOINTMENT_TYPE_CODES//c_appt_type_code[. = $post/../c_appt_type_code]/../c_appt_type_desc/text()}
-                <label>{$ASSUME_OFFICE_CODES//c_assume_office_code[. = $post/../c_assume_office_code]/../c_assume_office_desc/text()}</label>
-            </desc>
-            <desc xml:lang="zh-Hant">{$APPOINTMENT_TYPE_CODES//c_appt_type_code[. = $post/../c_appt_type_code]/../c_appt_type_desc_chn/text()}
-                <label>{$ASSUME_OFFICE_CODES//c_assume_office_code[. = $post/../c_assume_office_code]/../c_assume_office_desc_chn/text()}</label>
-            </desc>
-            </desc>)
-        else()
-        }
-        {if ($POSTED_TO_ADDR_DATA//c_posting_id[. = $post]/../c_addr_id[. < 1]) 
-        then ()
-        else (<placeName ref="{concat('#PL', $POSTED_TO_ADDR_DATA//c_posting_id[. = $post]/../c_addr_id/text())}"/>)
-        }    
-        {if ($POSTED_TO_OFFICE_DATA//c_personid[. = $nodes]/../c_inst_code[. <1]) then()
-        else(<state>{local:instadd($ppl, $POSTED_TO_OFFICE_DATA)}</state>)
-        }
-    </state>
-};
-
-declare function local:event ($participants as node()*) as node()* {
-(: no py or en name for events:)
-
-for $event in $EVENTS_DATA//c_personid[. = $participants]
-let $code := $EVENT_CODES//c_event_code[. = $event/../c_event_code]
-let $event-add := $EVENTS_ADDR//c_event_record_id[. = $event/../c_event_record_id]
-        return
-            element listEvent {  
-                element event { 
-                    if ($event/../c_year != 0)
-                    then (attribute when {local:isodate($event/../c_year/text())})
-                    else (''), 
-                    if ($code[. > 0])
-                    then (element head {$code/../c_event_name_chn/text()})
-                    else (), 
-                    if (empty($event/../c_event)) 
-                    then ()
-                    else (element label {$event/../c_event/text()}), 
-                    if (empty($event/../c_role))
-                    then()
-                    else (element desc {$event/../c_role/text()}),
-                    if (empty($event/../c_notes))
-                    then()
-                    else(element note {$event/../c_notes/text()}), 
-                    if (empty($event-add))
-                    then()
-                    else( element placeName {attribute ref {concat('#PL', $event-add/../c_addr_id/text())}})    
-                } 
-             }
-};
-
-declare function local:posses ($possesions as node()*) as node()* {
-
-
-for $stuff in $POSSESSION_DATA//c_personid[. = $possesions]
-let $act := $POSSESSION_ACT_CODES//c_possession_act_code[ . = $stuff/../c_possession_act_code]
-
-return 
- if(empty($stuff))
- then()
-else( 
-<state type="possession" subtype="{concat('POS', $act/text())}">
-    <label xml:lang="zh-Hant">{$stuff/../c_possession_desc_chn/text()}</label>                    
-    <label xml:lang="en">{$stuff/../c_possession_desc/text()}</label>
-</state>)
-};
-
-declare function local:entry ($nodes as node()*) as node()* {
-let $entd := doc("/db/apps/cbdb/source/CBDB/data/ENTRY_DATA.xml")
-let $entc := doc("/db/apps/cbdb/source/CBDB/code/ENTRY_CODES.xml")
-let $entt := doc("/db/apps/cbdb/source/CBDB/code/ENTRY_TYPES.xml")
-let $entctr := doc("/db/apps/cbdb/source/CBDB/code/ENTRY_CODE_TYPE_REL.xml")
-
-
-for $ppl in $entd//c_personid[. = $nodes]/../c_entry_code
-
-let $type := $entt//c_entry_type[. =$entctr//c_entry_code[. = $ppl]/../c_entry_type]
-return
-                <event when = "{if ($ppl/../c_year[. > 0]) then (local:isodate($ppl/../c_year/text())) else ()}" 
-                        key ="{$ppl/../c_exam_rank/text()}">
-                <label>entry</label>
-                {if ($ppl/../c_notes[. != '']) then (<note>{$ppl/../c_notes/text()}</note>) 
-                else ()
-                }
-                {if ($ppl/../c_age[. > 0]) then (<note>age: {$ppl/../c_age/text()}</note>)
-                else ()
-                }
-                {if ($ppl/../c_attempt_count[. > 0]) then (<note>attempt: {$ppl/../c_attempt_count/text()}</note>)
-                else()
-                }
-                    <event xml:lang="en"
-                            type = "{$type/../c_entry_type_desc/text()}" 
-                            sortKey = "{$type/../c_entry_type_sortorder/text()}">
-                        <label>{$entc//c_entry_code[. = $ppl]/../c_entry_desc/text()}</label>
-                    </event>
-                    <event xml:lang="zh-Hant"
-                            type = "{$type/../c_entry_type_desc_chn/text()}"
-                            sortKey = "{$type/../c_entry_type_sortorder/text()}">
-                         <label>{$entc//c_entry_code[. = $ppl]/../c_entry_desc_chn/text()}</label>
-                    </event>
-                    {if ($entd//c_personid[. = $nodes]/../c_inst_code[. < 1]) then ()
-                        else(local:instadd($ppl, $entd))
-                        }
-                    {if($entd/../c_addr_id[. < 1]) then ()
-                    else(<placeName ref="{concat('#PL', $entd/../c_addr_id/text())}"/>)                   
-                    }
-                </event>
-};
-
-declare function local:bio-add ($resident as node()*) as node()* {
-
-for $address in $BIOG_ADDR_DATA//c_personid[. = $resident]
-let $code := $BIOG_ADDR_CODES//c_addr_type[. = $address/../c_addr_type]
-(:dummy :)
-return 
- ()
 };
 
 (: and here again:)
@@ -680,7 +903,7 @@ let $association := $ASSOC_DATA//c_personid[. = $person]
 let $kin := $KIN_DATA//c_personid[. = $person]
 let $status := $STATUS_DATA//c_personid[. = $person]
 let $post := $POSTED_TO_OFFICE_DATA//c_personid[. = $person]
-let $posssesion := $POSSESSION_DATA//c_personid[. = $person]
+let $posssession := $POSSESSION_DATA//c_personid[. = $person]
 
 
 let $bio-add := $BIOG_ADDR_DATA//c_personid[. = $person]
@@ -804,43 +1027,53 @@ return
                </trait>)
                else()
         }
-        {if ($person/../c_tribe) then (
-        <trait type="tribe">
+        {if ($person/../c_tribe) 
+        then (<trait type="tribe">
             <desc>{$person/../c_tribe/text()}</desc>
         </trait>)
         else()
         }
-        {if ($person/../c_notes) then (
-        <note>{$person/../c_notes/text()}</note>)
+        {if ($person/../c_notes)
+        then (<note>{$person/../c_notes/text()}</note>)
         else ()
-        }
-        
+        }        
         {if ($person/../c_source) 
         then (<bibl>
             <ref target="{concat('#BIB', $person/../c_source/text())}"/>
                 {
-                if (empty($person/../c_pages)) then ()
+                if (empty($person/../c_pages)) 
+                then ()
                 else(<biblScope unit="page">{$person/../c_pages/text()}</biblScope>)
                 }
         </bibl>)
         else ()
         }
-        {
-        if (empty($kin) and empty($association))
+        {if (empty($kin) and empty ($association))
         then ()
-        else (<affiliation>    
-            {if (empty($kin)) 
-            then()
-                else(local:kin($person))
+        else (<affiliation>
+                    {if (empty($kin))
+                    then ()
+                    else (<note>
+                                    <listPerson
+                                        type="kin">
+                                        <listRelation
+                                            type="kinship">{local:kin($person)}</listRelation>
+                                    </listPerson>
+                                </note>)
+                    }
+                    {if (empty($association))
+                     then ()
+                     else (<note>
+                                    <listPerson
+                                        type="associates">
+                                        <listRelation
+                                            type="associations">{local:asso($person)}</listRelation>
+                                    </listPerson>
+                                </note>)
+                     }
+                  </affiliation>)
             }
-            {if (empty($association)) 
-            then()
-            else(local:asso($person))
-            }
-        </affiliation>)
-        }
-        {
-        if (empty($status) and empty($post)) 
+        {if (empty($status) and empty ($post)) 
         then ()
         else(<socecStatus>
             {if ($status) 
@@ -854,7 +1087,7 @@ return
         </socecStatus>)
         }
         {local:event($person)}
-        {if (empty($posssesion)) 
+        {if (empty($posssession)) 
         then ()
         else(local:posses($person))
         }
@@ -869,22 +1102,10 @@ return
             <ptr target="{$link/text()}"/>}        
         </linkGrp>)
         }
-        
-        {if (empty($person/../c_created_by)) 
-        then ()
-        else (<note type="created" target="{concat('#',$person/../c_created_by/text())}">
-                <date when="{local:sqldate($person/../c_created_date)}"/>
-              </note>)
-        }
-        {if (empty($person/../c_modified_by)) 
-        then ()
-        else (<note type="modified" target="{concat('#',$person/../c_modified_by/text())}">
-                <date when="{local:sqldate($person/../c_modified_date)}"/>
-              </note>)
-        }
-       </person> 
+        {local:create-mod-by($person/../c_created_by, $person/../c_modified_by)}
+    </person> 
 };
-let $test := $BIOG_MAIN//c_personid[. < 500]
+let $test := $BIOG_MAIN//c_personid[. > 0][. < 500]
 let $full := $BIOG_MAIN//c_personid[. > 0]
 
 return
