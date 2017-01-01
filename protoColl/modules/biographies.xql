@@ -10,6 +10,12 @@ declare namespace output = "http://www.tei-c.org/ns/1.0";
 declare variable $src := '/db/apps/cbdb-data/src/xml/';
 declare variable $target := '/db/apps/cbdb-data/target/';
 
+(:This is the main Transformation of Biographical data from CBDB.
+ local:biog strores person data as tei:persList.
+ 
+ The following variable declarations were auto-generated via gitify.xpl
+:)
+
 declare variable $BIOG_MAIN:= doc(concat($src, 'BIOG_MAIN.xml')); 
 declare variable $ALTNAME_CODES:= doc(concat($src, 'ALTNAME_CODES.xml')); 
 declare variable $ALTNAME_DATA:= doc(concat($src, 'ALTNAME_DATA.xml'));
@@ -28,6 +34,11 @@ declare variable $BIOG_INST_CODES:= doc(concat($src, 'BIOG_INST_CODES.xml'));
 declare variable $BIOG_INST_DATA:= doc(concat($src, 'BIOG_INST_DATA.xml')); 
 
 declare variable $CHORONYM_CODES:= doc(concat($src, 'CHORONYM_CODES.xml'));
+
+declare variable $ENTRY_CODES:= doc(concat($src, 'ENTRY_CODES.xml')); 
+declare variable $ENTRY_CODE_TYPE_REL:= doc(concat($src, 'ENTRY_CODE_TYPE_REL.xml')); 
+declare variable $ENTRY_DATA:= doc(concat($src, 'ENTRY_DATA.xml')); 
+declare variable $ENTRY_TYPES:= doc(concat($src, 'ENTRY_TYPES.xml')); 
 
 declare variable $EVENTS_ADDR:= doc(concat($src, 'EVENTS_ADDR.xml')); 
 declare variable $EVENTS_DATA:= doc(concat($src, 'EVENTS_DATA.xml')); 
@@ -69,14 +80,12 @@ declare variable $SOCIAL_INSTITUTION_CODES_CONVERSION:= doc(concat($src, 'SOCIAL
 declare variable $SOCIAL_INSTITUTION_NAME_CODES:= doc(concat($src, 'SOCIAL_INSTITUTION_NAME_CODES.xml')); 
 declare variable $SOCIAL_INSTITUTION_TYPES:= doc(concat($src, 'SOCIAL_INSTITUTION_TYPES.xml')); 
 
-(:This is the main Transformation of Biographical data from CBDB.
- local:biog transforms persons from the BIOG_MAIN table.
-:)
 
 (:TODO:
 - split the biogmain transformation into two files one for biog main and aliases on fore event n stuff?
 - consider tei:occupation to sort through the whole entry office posting mess
 - create a taxonony for offices
+- unify listEvent for entry, possession, event, 
 
 :)
 
@@ -418,6 +427,58 @@ yet unused mediated relations , tei handles this quite easily
 
 :)
 
+(: REPORT
+let $symmetry :=
+    for $symmetric in $ASSOC_CODES//row
+    where $symmetric/c_assoc_code = $symmetric/c_assoc_pair
+    return
+        $symmetric
+    
+let $assymetry := 
+    for $assymetric in $ASSOC_CODES//row
+    where $assymetric/c_assoc_code != $assymetric/c_assoc_pair
+    return
+        $assymetric
+        
+let $bys :=
+(\: filters all */by pairs :\)
+    for $by in $ASSOC_CODES//c_assoc_desc
+    where contains($by/text(), ' by')
+    return 
+        $by
+    
+let $was :=
+(\: filter all  was/of pairs:\)
+    for $was in $ASSOC_CODES//c_assoc_desc
+    where contains($was/text(), ' was')
+    return
+        $was
+let $to :=
+(\: filter all from/to pairs :\)
+    for $to in $ASSOC_CODES//c_assoc_desc
+    where contains($to/text(), ' to')
+    return
+        $to
+    
+let $report := 
+    <report>
+        <total>{count(//row)}</total>
+        <unaccounted>{count(//row) - (count($assymetry) + count($symmetry))}</unaccounted>
+        <symmetric>
+            <sym_sum>{count($symmetry)}</sym_sum>
+            <rest>{count(//row) - count($symmetry)}</rest>
+        </symmetric>
+        <assymetric>
+            <assy_sum>{count($assymetry)}</assy_sum>
+            <assy_by>{count($bys)*2}</assy_by>
+            <rest>{count($assymetry) - count($bys)*2}</rest>
+            <assy_was>{count($was)*2}</assy_was>
+            <rest>{count($assymetry) - count($bys)*2 - count($was)*2}</rest>
+            <assy_to>{count($to)*2}</assy_to>
+        </assymetric>
+    </report> 
+:)
+
 (:
 [tts_sysno] INTEGER,                                d
  [c_assoc_code] INTEGER,                            x
@@ -480,8 +541,7 @@ whats up with $assoc_codes//c_assoc_role_type ?:)
                 or ends-with($code/../c_assoc_desc/text(), ' of')
                 or ends-with($code/../c_assoc_desc/text(), 'ed')
                 or ends-with($code/../c_assoc_desc/text(), ' with')
-                or ends-with($code/../c_assoc_desc/text(), ' from')
-                or $code/../c_assoc_desc/text() eq 'visited'
+                or ends-with($code/../c_assoc_desc/text(), ' from')                
                 or $code/../c_assoc_desc/text() eq 'Knew')
                 then
                     (attribute active {concat('#BIO', $individual/text())},
@@ -564,7 +624,124 @@ return
           }
           )
 };
+
 (:office related stuff:)
+declare function local:entry ($initiates as node()*) as node()* {
+(: local:entry expects persons from BIOG_MAIN and returns tei:events for entries into social institutions.
+the output of local:entry should match the structure the output of local:event
+:)
+
+(: TODO
+what does c_exam_field point to nothing its a string zh-Hant only
+use @role to "link to status of a place, or occupation of a person"!
+@type = $type (99) -> label
+@subtype = $code (>200) -> desc
+@sortKey = sequence 
+? = attempts
+
+entries should become a nested taxonomy to be @ref'ed
+make sponsors into their own note element
+:)
+
+for $initiate in $ENTRY_DATA//c_personid[. =$initiates]
+
+let $code := $ENTRY_CODES//c_entry_code[. = $initiate/../c_entry_code]
+let $type-rel := $ENTRY_CODE_TYPE_REL//c_entry_code[ . = $initiate/../c_entry_code]
+let $type :=  $ENTRY_TYPES//c_entry_type[. = $type-rel/../c_entry_type]
+
+(:
+[tts_sysno] INTEGER, 
+ [c_personid] INTEGER,                          x
+ [c_entry_code] INTEGER,                        x
+ [c_sequence] INTEGER,                          x
+ [c_exam_rank] CHAR(255),                       x                       
+ [c_kin_code] INTEGER,                          x
+ [c_kin_id] INTEGER,                            !
+ [c_assoc_code] INTEGER,                        x
+ [c_assoc_id] INTEGER,                          !
+ [c_year] INTEGER,                              x
+ [c_age] INTEGER,                               !
+ [c_nianhao_id] INTEGER,                       d
+ [c_entry_nh_year] INTEGER,                    d
+ [c_entry_range] INTEGER,                      d
+ [c_inst_code] INTEGER NOT NULL,              !
+ [c_inst_name_code] INTEGER NOT NULL,        !
+ [c_exam_field] CHAR(255),                     x
+ [c_addr_id] INTEGER,                           x
+ [c_parental_status] INTEGER,                 !
+ [c_attempt_count] INTEGER,                    x
+ [c_source] INTEGER,                            x
+ [c_pages] CHAR(255),                           d
+ [c_notes] CHAR,                                 x
+ [c_posting_notes] CHAR(255),                  !
+ [c_created_by] CHAR(255),                      d
+ [c_created_date] CHAR(255),                    d
+ [c_modified_by] CHAR(255),                     d
+ [c_modified_date] CHAR(255),                   d
+:)
+
+(:let $entd := doc("/db/apps/cbdb/source/CBDB/data/ENTRY_DATA.xml")
+let $entc := doc("/db/apps/cbdb/source/CBDB/code/ENTRY_CODES.xml")
+let $entt := doc("/db/apps/cbdb/source/CBDB/code/ENTRY_TYPES.xml")
+let $entctr := doc("/db/apps/cbdb/source/CBDB/code/ENTRY_CODE_TYPE_REL.xml")
+
+
+for $ppl in $entd//c_personid[. = $nodes]/../c_entry_code
+
+let $type := $entt//c_entry_type[. =$entctr//c_entry_code[. = $ppl]/../c_entry_type]:)
+return
+    element event{
+        attribute type {$type/text()},
+        attribute subtype {$code/text()}, 
+        if ($initiate/../c_year[. = 0] or empty($initiate/../c_year)) 
+        then ()
+        else (attribute when {local:isodate($initiate/../c_year/text())}),
+        if ($initiate/../c_addr_id[. = 0] or empty($initiate/../c_addr_id))
+        then ()
+        else (attribute where {concat('#PL', $initiate/../c_addr_id/text())}),
+        attribute sortKey {$initiate/../c_sequence/text()},
+        for $sponsor in $initiate
+        return 
+            if ($sponsor/../c_kin_id[. > 0] or $sponsor/../c_assoc_id[. > 0])
+            then (attribute role {concat('#BIO', $sponsor/text())})
+            else (),                    
+        if ($initiate/../c_source[. = 0] or empty($initiate/../c_source))
+        then ()
+        else(attribute source{concat('#BIB', $initiate/../c_source/text())}),
+            element head {'entry'}, 
+            if ($code[. < 1])
+            then ()
+            else(                 
+                element label {attribute xml:lang{'en'},
+                $code/../c_entry_desc/text()}),
+                element label {attribute xml:lang {'zh-Hant'},
+                    $code/../c_entry_desc_chn/text()},
+            if ($type[. < 1])
+            then ()
+            else (element desc { attribute type {$type/../c_entry_type_level/text()},
+                attribute subtype {$type/../c_entry_type_sortorder/text()},
+                element desc {attribute xml:lang{'en'},
+                 $type/../c_entry_type_desc/text()},
+                element desc {attribute xml:lang {'zh-Hant'},
+                    $type/../c_entry_type_desc_chn/text()}}), 
+            if ($initiate/../c_exam_field)
+            then (element note{ attribute type {'field'},
+                $initiate/../c_exam_field/text()})
+            else (),
+            if ($initiate/../c_attempt_count[. > 0]) 
+            then (element note{ attribute type{'attempts'},
+                $initiate/../c_attempt_count/text()})
+            else (),
+            if ($initiate/../c_exam_rank[. != '0']) 
+            then (element note{ attribute type{'rank'},
+                $initiate/../c_exam_rank/text()})
+            else (),    
+            if ($initiate/../c_notes)
+            then (element note {$initiate/../c_notes/text()})
+            else ()
+    }               
+};
+
 declare function local:office_title ($offices as node()*) as node()* {
 
 (:This screams for its own taxonomy to be included via pointers as rolename via key ID
@@ -686,49 +863,6 @@ return
     </state>
 };
 
-declare function local:entry ($nodes as node()*) as node()* {
-let $entd := doc("/db/apps/cbdb/source/CBDB/data/ENTRY_DATA.xml")
-let $entc := doc("/db/apps/cbdb/source/CBDB/code/ENTRY_CODES.xml")
-let $entt := doc("/db/apps/cbdb/source/CBDB/code/ENTRY_TYPES.xml")
-let $entctr := doc("/db/apps/cbdb/source/CBDB/code/ENTRY_CODE_TYPE_REL.xml")
-
-
-for $ppl in $entd//c_personid[. = $nodes]/../c_entry_code
-
-let $type := $entt//c_entry_type[. =$entctr//c_entry_code[. = $ppl]/../c_entry_type]
-return
-                <event when = "{if ($ppl/../c_year[. > 0]) 
-                                  then (local:isodate($ppl/../c_year/text())) 
-                                  else ()}" 
-                        key ="{$ppl/../c_exam_rank/text()}">
-                <label>entry</label>
-                {if ($ppl/../c_notes[. != '']) then (<note>{$ppl/../c_notes/text()}</note>) 
-                else ()
-                }
-                {if ($ppl/../c_age[. > 0]) then (<note>age: {$ppl/../c_age/text()}</note>)
-                else ()
-                }
-                {if ($ppl/../c_attempt_count[. > 0]) then (<note>attempt: {$ppl/../c_attempt_count/text()}</note>)
-                else()
-                }
-                    <event xml:lang="en"
-                            type = "{$type/../c_entry_type_desc/text()}" 
-                            sortKey = "{$type/../c_entry_type_sortorder/text()}">
-                        <label>{$entc//c_entry_code[. = $ppl]/../c_entry_desc/text()}</label>
-                    </event>
-                    <event xml:lang="zh-Hant"
-                            type = "{$type/../c_entry_type_desc_chn/text()}"
-                            sortKey = "{$type/../c_entry_type_sortorder/text()}">
-                         <label>{$entc//c_entry_code[. = $ppl]/../c_entry_desc_chn/text()}</label>
-                    </event>
-                    {if ($entd//c_personid[. = $nodes]/../c_inst_code[. < 1]) then ()
-                        else(local:instadd($ppl, $entd))
-                        }
-                    {if($entd/../c_addr_id[. < 1]) then ()
-                    else(<placeName ref="{concat('#PL', $entd/../c_addr_id/text())}"/>)                   
-                    }
-                </event>
-};
 (:end here:)
 declare function local:event ($participants as node()*) as node()* {
 (: no py or en name for events:)
@@ -737,11 +871,14 @@ for $event in $EVENTS_DATA//c_personid[. = $participants]
 let $code := $EVENT_CODES//c_event_code[. = $event/../c_event_code]
 let $event-add := $EVENTS_ADDR//c_event_record_id[. = $event/../c_event_record_id]
         return
-            element listEvent {  
+             
                 element event { 
                     if ($event/../c_year != 0)
                     then (attribute when {local:isodate($event/../c_year/text())})
-                    else (''), 
+                    else (),
+                    if (empty($event-add))
+                    then ()
+                    else (attribute where {concat('#PL', $event-add/../c_addr_id/text())}),
                     if ($code[. > 0])
                     then (element head {$code/../c_event_name_chn/text()})
                     else (), 
@@ -753,12 +890,9 @@ let $event-add := $EVENTS_ADDR//c_event_record_id[. = $event/../c_event_record_i
                     else (element desc {$event/../c_role/text()}),
                     if (empty($event/../c_notes))
                     then()
-                    else(element note {$event/../c_notes/text()}), 
-                    if (empty($event-add))
-                    then()
-                    else( element placeName {attribute ref {concat('#PL', $event-add/../c_addr_id/text())}})    
+                    else(element note {$event/../c_notes/text()})    
                 } 
-             }
+             
 };
 
 declare function local:posses ($possessions as node()*) as node()* {
@@ -905,6 +1039,9 @@ let $status := $STATUS_DATA//c_personid[. = $person]
 let $post := $POSTED_TO_OFFICE_DATA//c_personid[. = $person]
 let $posssession := $POSSESSION_DATA//c_personid[. = $person]
 
+let $event := $EVENTS_DATA//c_personid[. = $person]
+let $entry := $ENTRY_DATA//c_personid[. = $person]
+
 
 let $bio-add := $BIOG_ADDR_DATA//c_personid[. = $person]
 let $bio-inst := $BIOG_INST_DATA//c_personid[. = $person]
@@ -1012,8 +1149,7 @@ return
                 <label xml:lang="zh-Hant">{$household/../c_household_status_desc_chn/text()}</label>
             </trait>)
             else()
-       }
-       
+       }       
         {if ($person/../c_ethnicity_code > 0) 
         then (<trait type="ethnicity" key="{$ethnicity/../c_group_code/text()}">
                 <label>{$ethnicity/../c_ethno_legal_cat/text()}</label>
@@ -1086,7 +1222,19 @@ return
             }
         </socecStatus>)
         }
-        {local:event($person)}
+        {if (empty($event) and empty($entry))
+        then ()
+        else (<listEvent>
+            {if ($event)
+            then (local:event($person))
+            else ()
+            }
+            {if ($entry)
+            then (local:entry($person))
+            else()
+            }                      
+        </listEvent>)
+        }        
         {if (empty($posssession)) 
         then ()
         else(local:posses($person))
