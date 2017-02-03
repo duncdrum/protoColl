@@ -4,7 +4,7 @@
         <!-- Full text index based on Lucene -->
         <lucene>
             <analyzer class="org.apache.lucene.analysis.cjk.CJKAnalyzer"/>
-            <!--  Basic text containers independent of layout   -->
+            <!-- Basic text containers independent of layout   -->
             <text qname="tei:div"/>
             <text qname="tei:ab">
                 <inline qname="tei:hi"/>
@@ -17,17 +17,24 @@
         
         <!-- Range indexes -->
         <range>
-            <!--  named entities   -->
+            <!-- named entities -->
             <create qname="tei:person" type="xs:string"/>
             <create qname="tei:persName" type="xs:string"/>
+            <create qname="tei:org" type="xs:string"/>
             <create qname="tei:orgName" type="xs:string"/>
             <create qname="tei:place" type="xs:string"/>
             <create qname="tei:placeName" type="xs:string"/>
             <create qname="tei:location" type="xs:string"/>
             <create qname="tei:title" type="xs:string"/>
             <create qname="tei:bibl" type="xs:string"/>
-            
-            <!--  aux (id are always indexed)   -->
+            <create qname="tei:taxonomy" type="xs:string"/>
+            <create qname="tei:category" type="xs:string"/>
+            <create qname="tei:catDesc" type="xs:string"/>
+            <!-- move to full-text? -->
+            <create qname="tei:desc" type="xs:string"/>
+            <create qname="tei:label" type="xs:string"/>
+            <create qname="tei:note" type="xs:string"/>
+            <!-- aux (id are always indexed) -->
             <create qname="@n" type="xs:string"/>
             <create qname="@ana" type="xs:string"/>
             <create qname="@type" type="xs:string"/>
@@ -35,7 +42,7 @@
             <create qname="@target" type="xs:string"/>
             <create qname="@sameAs" type="xs:string"/>
             
-            <!--  numerical   -->
+            <!-- numerical -->
             <create qname="tei:date" type="xs:string"/>
             <create qname="@when" type="xs:string"/>
             <create qname="tei:geo" type="xs:double"/>
