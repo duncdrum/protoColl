@@ -13,6 +13,11 @@ You can follow the [link](http://kjc-ws2.kjc.uni-heidelberg.de:8900/exist/apps/p
 
 
 ### To install ... 
+
+simply download the latest release from [here](https://github.com/duncdrum/protoColl/releases).
+You can install the downloaded ``.xar`` file via exist-db's dashboard. 
+
+#### ... from source
 1. Download, fork or clone this GitHub repository
 2. Open the the folder you just downloaded in CLI, type:  
 ``` cd protoColl ```
