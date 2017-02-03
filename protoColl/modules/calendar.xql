@@ -1,27 +1,38 @@
 xquery version "3.0";
 
 import module namespace xmldb="http://exist-db.org/xquery/xmldb";
+(:import module namespace functx="http://www.functx.com";:)
+import module namespace global="http://exist-db.org/apps/cbdb-data/global" at "global.xqm";
 
 declare namespace tei="http://www.tei-c.org/ns/1.0";
-declare namespace output = "http://www.tei-c.org/ns/1.0";
+declare namespace no="http://none";
+declare namespace cal="http://exist-db.org/apps/cbdb-data/calendar";
 
-declare variable $src := '/db/apps/cbdb-data/src/xml/';
-declare variable $target := '/db/apps/cbdb-data/target/';
+declare default element namespace "http://www.tei-c.org/ns/1.0";
 
-declare variable $GANZHI_CODES:= doc(concat($src, 'GANZHI_CODES.xml')); 
-declare variable $NIAN_HAO:= doc(concat($src, 'NIAN_HAO.xml')); 
-declare variable $DYNASTIES:= doc(concat($src, 'DYNASTIES.xml')); 
+declare variable $cal:ZH := doc(concat($global:target, $global:calendar));
+declare variable $cal:path := $cal:ZH/taxonomy/taxonomy/category;
+
 
 (:calendar.xql reads the calendar aux tables (GANZHI, DYNASTIES, NIANHAO) 
     and creates a taxonomy element for inculsion in the teiHeader via xi:xinclude.
     The taxonomy consists of two elements one for the sexagenarycycle, 
-    and one nested taxonomy for reign-titles and dynsties.
-    we are dropping the c_sort value for dynasties since sequential sorting
+    and one nested taxonomy for reign-titles and dynasties.
+    We are dropping the c_sort value for dynasties since sequential sorting
     is implicit in the data structure
 :)
 
+(:TODO:
+ - friggin YEAR_RANGE_CODES.xml
+ - many nianhaos aren't transliterated hence $NH-py
+ - DYNASTIES contains both translations and transliterations:
+     e.g. 'NanBei Chao' but 'Later Shu (10 states)'  
+   more normalization *yay*
+ - make 10states a @type ?  
+:)
 
-declare function local:isodate ($string as xs:string?)  as xs:string* {
+
+declare function cal:isodate ($string as xs:string?)  as xs:string* {
 
 (:This function returns proper xs:gYear type values, "0000", 4 digits, with leading "-" for BCE dates
    <a>-1234</a>    ----------> <gYear>-1234</gYear>
@@ -40,7 +51,121 @@ declare function local:isodate ($string as xs:string?)  as xs:string* {
     else (concat (string-join((for $i in (string-length($string) to 3) return '0'),'') , $string))
 };
 
-declare function local:ganzhi ($year as xs:integer, $lang as xs:string?)  as xs:string* {
+declare function cal:sqldate ($timestamp as xs:string?)  as xs:string* {
+concat(substring($timestamp, 1, 4), '-', substring($timestamp, 5, 2), '-', substring($timestamp, 7, 2)) 
+};
+
+declare function cal:custo-date-point (
+    $dynasty as node()*, 
+    $reign as node()*,
+    $year as xs:string*, 
+    $type as xs:string?) as node()*{
+
+(:This function takes chinese calendar date points ending in *_dy, *_gz, *_nh.
+It returns a single tei:date element using att.datable.custom. 
+
+The normalized format takes DYNASTY//no:c_sort which is specific to CBDB,  
+followed by the sequence of reigns determined by their position in cal_ZH.xml
+followed by the Year number.D(\d*)-R(\d*)-(\d*)
+:)
+
+(:TODO
+- getting to a somehwhat noramlized useful representation ofChinese Reign dates is tricky.
+    inconsinsten pinyin for Nianhao creates ambigous and ugly dates.
+- handle //no:c_dy[. = 0] stuff
+- add @period with #d42 #R123
+- find a way to prevent empty attributes more and better logic FTW
+- If only a dynasty is known lets hear it,
+the others are dropped since only a year or nianhao is of little information value. 
+:)
+
+let $dy := $global:DYNASTIES//no:c_dy[. = $dynasty/text()]
+let $motto := count($cal:path/category[@xml:id = concat('R', $reign/text())]/preceding-sibling::category) +1
+
+        
+let $date-norm := string-join((concat('D', $dy/../no:c_sort), concat('R',$motto), concat('Y', $year)),'-')
+        
+
+
+let $date-orig := string-join(($dy/../no:c_dynasty_chn, 
+                    $global:NIAN_HAO//no:c_nianhao_id[. = $reign/text()]/../no:c_nianhao_chn,
+                    concat($year, '年')),'-')
+
+
+(:$type has two basic values
+defaults to when
+S/E = start / end
+c/u for certain/uncertain
+:)
+
+           
+
+return 
+    element date { attribute datingMethod {'#chinTrad'}, 
+        attribute calendar {'#chinTrad'},
+        switch
+            ($type)
+                case 'uStart'return attribute notBefore-custom {$date-norm}
+                case 'uEnd' return attribute notAfter-custom {$date-norm}
+                case 'Start' return attribute from-custom {$date-norm}
+                case 'End' return attribute to-custom {$date-norm}
+                default return  attribute when-custom  {$date-norm},
+                $date-orig                  
+    }
+};
+
+declare function cal:custo-date-range (
+    $dy-start as node()*, $dy-end as node()*,
+    $reg-start as node()*, $reg-end as node()*, 
+    $year-start as xs:string*, $year-end as xs:string*, 
+    $type as xs:string?) as node()*{
+
+(:This function takes chinese calendar date ranges ending in *_dy, *_gz, *_nh.
+It returns a single tei:date element using att.datable.custom. :)
+
+let $DS := $global:DYNASTIES//no:c_dy[. = $dy-start/text()]
+let $DE := $global:DYNASTIES//no:c_dy[. = $dy-end/text()]
+
+let $RS := count($cal:path/category[@xml:id = concat('R',  $reg-start/text())]/preceding-sibling::category) +1
+let $RE := count($cal:path/category[@xml:id = concat('R',  $reg-end/text())]/preceding-sibling::category) +1
+
+        
+let $start-norm := string-join((concat('D', $DS/../no:c_sort), concat('R',$RS), concat('Y', $year-start)),'-')
+let $end-norm := string-join((concat('D', $DE/../no:c_sort), concat('R',$RE), concat('Y', $year-end)),'-')       
+
+
+                  
+let $start-orig := string-join(($DS/../no:c_dynasty_chn, 
+                    $global:NIAN_HAO//no:c_nianhao_id[. = $reg-start/text()]/../no:c_nianhao_chn,
+                    concat($year-start, '年')),'-')  
+                    
+let $end-orig := string-join(($DE/../no:c_dynasty_chn, 
+                    $global:NIAN_HAO//no:c_nianhao_id[. = $reg-end/text()]/../no:c_nianhao_chn,
+                    concat($year-end, '年')),'-')                 
+                    
+(:$type 
+defaults to certain dates = from/when
+'uRange' returns uncertain date-ranges
+:)                    
+
+return     
+        switch
+            ($type)
+                case 'uRange'return element date { attribute datingMethod {'#chinTrad'}, 
+                                            attribute calendar {'#chinTrad'},
+                                            attribute notBefore-custom {$start-norm},
+                                       attribute notAfter-custom {$end-norm},
+                                       concat($start-orig, ' ',$end-orig)                 
+                                        }
+                default return element date { attribute datingMethod {'#chinTrad'}, 
+                                            attribute calendar {'#chinTrad'}, 
+                                        attribute from-custom {$start-norm}, 
+                                        attribute to-custom  {$end-norm},
+                                    concat($start-orig, ' ',$end-orig)                 
+                                    }
+};
+
+declare function cal:ganzhi ($year as xs:integer, $lang as xs:string?)  as xs:string* {
 
 (:Just for fun: calculate the ganzhi cycle for gYears where $year is an integer,
 and $lang is either hanzi = 'zh', or pinyin ='py' for output. 
@@ -53,14 +178,14 @@ etc. :)
 
 (: TEST:
 
-local:ganzhi(2036, 'zh') -> 丙辰
-local:ganzhi(1981, 'zh') -> 辛酉
-local:ganzhi(1967, 'zh') -> 丁未
-local:ganzhi(0004, 'zh') -> 甲子
-local:ganzhi(0001, 'zh') -> 壬戌
-local:ganzhi(0000, 'zh') -> no such gYear 
-local:ganzhi(-0001, 'zh') -> 庚申
-local:ganzhi(-0247, 'zh') -> 乙卯 = 246BC founding of Qing
+cal:ganzhi(2036, 'zh') -> 丙辰
+cal:ganzhi(1981, 'zh') -> 辛酉
+cal:ganzhi(1967, 'zh') -> 丁未
+cal:ganzhi(0004, 'zh') -> 甲子
+cal:ganzhi(0001, 'zh') -> 壬戌
+cal:ganzhi(0000, 'zh') -> no such gYear 
+cal:ganzhi(-0001, 'zh') -> 庚申
+cal:ganzhi(-0247, 'zh') -> 乙卯 = 246BC founding of Qing
 
 :)
 
@@ -127,57 +252,61 @@ local:ganzhi(-0247, 'zh') -> 乙卯 = 246BC founding of Qing
             
 };
 
-xmldb:store($target, 'cal_ZH.xml', 
+declare function cal:sexagenary ($ganzhi as node()*) as item()* {
+<taxonomy xml:id="sexagenary"> 
+{ 
+for $gz in $ganzhi
+return         
+    global:validate-fragment(<category xml:id="{concat('S', $gz/no:c_ganzhi_code/text())}">
+        <catDesc xml:lang="zh-Hant">{$gz/no:c_ganzhi_chn/text()}</catDesc>
+        <catDesc xml:lang="zh-Latn-alalc97">{$gz/no:c_ganzhi_py/text()}</catDesc>
+    </category>, 'category')
+            }
+</taxonomy>
+};
 
-        <taxonomy xml:id="cal_ZH">
-            <taxonomy xml:id="sexagenary"> 
-            { 
-            for $gz in $GANZHI_CODES//row
-            return         
-                <category xml:id="{concat('S', $gz/c_ganzhi_code/text())}">
-                    <catDesc xml:lang="zh-Hant">{$gz/c_ganzhi_chn/text()}</catDesc>
-                    <catDesc xml:lang="zh-alalc97">{$gz/c_ganzhi_py/text()}</catDesc>
-                </category>
-            }
-            </taxonomy>
-            <taxonomy xml:id="reign">
-            {
-            for $dy in $DYNASTIES//row
-            let $dy_id := $dy/c_dy
-            where $dy/c_dy > '0'
-            return                
-                <category xml:id="{concat('D', $dy/c_dy/text())}">
-                    <catDesc>
-                        <date from="{local:isodate($dy/c_start)}" to="{local:isodate($dy/c_end)}"/>
-                    </catDesc>
-                    <catDesc xml:lang="zh-Hant">{$dy/c_dynasty_chn/text()}</catDesc>
-                    <catDesc xml:lang="en">{$dy/c_dynasty/text()}</catDesc>
-                    {
-                    for $nh in $NIAN_HAO//row 
-                    where $nh/c_dy = $dy_id
-                    return
-                        if ($nh/c_nianhao_pin != '')
-                        then (
-                              <category xml:id="{concat('R' , $nh/c_nianhao_id/text())}">
-                                  <catDesc>
-                                     <date from="{local:isodate($nh/c_firstyear)}" to="{local:isodate($nh/c_lastyear)}"/>
-                                  </catDesc>
-                                  <catDesc xml:lang="zh-Hant">{$nh/c_nianhao_chn/text()}</catDesc>
-                                  <catDesc xml:lang="zh-alalc97">{$nh/c_nianhao_pin/text()}</catDesc>
-                                </category>) 
-                        else (
-                              <category xml:id="{concat('R' , $nh/c_nianhao_id/text())}">
-                                  <catDesc>
-                                      <date from="{local:isodate($nh/c_firstyear)}" to="{local:isodate($nh/c_lastyear)}"/>                    
-                                  </catDesc>
-                                  <catDesc xml:lang="zh-Hant">{$nh/c_nianhao_chn/text()}</catDesc>
-                              </category>)                           
-                    }
-                 </category>
-            }
-            </taxonomy>
-        </taxonomy>
-)
+declare function cal:dynasties ($dynasties as node()*) as item()* {
+<taxonomy xml:id="reign">
+    {
+    for $dy in $dynasties
+    let $dy_id := $dy/no:c_dy
+    where $dy/no:c_dy > '0'
+    return                
+        global:validate-fragment(<category xml:id="{concat('D', $dy_id/text())}">
+            <catDesc>
+                <date from="{cal:isodate($dy/no:c_start)}" to="{cal:isodate($dy/no:c_end)}"/>
+        </catDesc>
+        <catDesc xml:lang="zh-Hant">{$dy/no:c_dynasty_chn/text()}</catDesc>
+        <catDesc xml:lang="en">{$dy/no:c_dynasty/text()}</catDesc>
+        {
+        for $nh in $global:NIAN_HAO//no:row 
+        where $nh/no:c_dy = $dy_id
+        return
+            if ($nh/no:c_nianhao_pin != '')
+            then (<category xml:id="{concat('R' , $nh/no:c_nianhao_id/text())}">
+                        <catDesc>
+                            <date from="{cal:isodate($nh/no:c_firstyear)}" to="{cal:isodate($nh/no:c_lastyear)}"/>
+                        </catDesc>
+                        <catDesc xml:lang="zh-Hant">{$nh/no:c_nianhao_chn/text()}</catDesc>
+                        <catDesc xml:lang="zh-Latn-alalc97">{$nh/no:c_nianhao_pin/text()}</catDesc>
+                   </category>) 
+            else (<category xml:id="{concat('R' , $nh/no:c_nianhao_id/text())}">
+                        <catDesc>
+                            <date from="{cal:isodate($nh/no:c_firstyear)}" to="{cal:isodate($nh/no:c_lastyear)}"/>                    
+                        </catDesc>
+                        <catDesc xml:lang="zh-Hant">{$nh/no:c_nianhao_chn/text()}</catDesc>
+                    </category>)                           
+        }
+        </category>, 'category')
+    }
+</taxonomy>
+};
+
+xmldb:store($global:target, $global:calendar, 
+    <taxonomy xml:id="cal_ZH">{                
+            cal:sexagenary($global:GANZHI_CODES//no:row),
+            cal:dynasties($global:DYNASTIES//no:row)}
+    </taxonomy>)
 
             
 
