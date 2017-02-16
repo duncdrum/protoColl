@@ -29,7 +29,7 @@
             <create qname="@n" type="xs:string"/>
             <create qname="@ana" type="xs:string"/>
             <create qname="@type" type="xs:string"/>
-            <create qname="@ref" type=" xs:string"/>
+            <create qname="@ref" type="xs:string"/>
             <create qname="@target" type="xs:string"/>
             <create qname="@sameAs" type="xs:string"/>
             
